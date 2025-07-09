@@ -93,13 +93,13 @@
             class="annotation-list"
           >
             <button
-              v-for="(note, key) in verseAnnotations"
+              v-for="(entry, key) in verseAnnotations"
               :key="key"
               class="bookmark-item"
               @click="goToAnnotation(key)"
             >
               <span class="bookmark-text">
-                {{ key }} - {{ note.slice(0, 30) }}...
+                {{ key }} - {{ entry.note.slice(0, 30) }}...
               </span>
             </button>
           </div>
@@ -181,14 +181,15 @@
                         v-for="verse in leftPageVerses"
                         :key="'left-' + verse.verse"
                         class="verse"
-                        :class="{
-                          highlighted: highlightedVerse === verse.verse,
-                        }"
+                        :style="getHighlightStyle(verse)"
                         @click="openAnnotationModal(verse)"
                         @dblclick="addBookmark(verse)"
                       >
                         <span class="verse-number">{{ verse.verse }}</span>
-                        <span class="verse-text">{{ verse.text }}</span>
+                        <span
+                          class="verse-text"
+                          v-html="getVerseHTML(verse)"
+                        ></span>
                       </div>
                     </transition-group>
                   </div>
@@ -219,7 +220,10 @@
                         @dblclick="addBookmark(verse)"
                       >
                         <span class="verse-number">{{ verse.verse }}</span>
-                        <span class="verse-text">{{ verse.text }}</span>
+                        <span
+                          class="verse-text"
+                          v-html="getVerseHTML(verse)"
+                        ></span>
                       </div>
                     </transition-group>
                   </div>
@@ -301,6 +305,22 @@
               class="annotation-input"
               placeholder="Type your note here..."
             ></textarea>
+            <label for="highlightColor" style="margin-top: 0.5rem"
+              >Highlight Color:</label
+            >
+            <input
+              type="color"
+              id="highlightColor"
+              v-model="highlightColor"
+              style="
+                width: 100%;
+                height: 40px;
+                border: none;
+                background: transparent;
+                cursor: pointer;
+              "
+            />
+
             <div class="modal-actions">
               <button class="modal-btn save" @click="saveAnnotation">
                 Save
@@ -339,24 +359,54 @@ const filteredBooks = computed(() => {
   return books.filter((b) => b.name.toLowerCase().includes(q));
 });
 
+const selectedText = ref("");
+
+function getSelectedText() {
+  const selection = window.getSelection();
+  return selection?.toString().trim() || "";
+}
+
 const showAnnotations = ref(false);
 
 const showAnnotationModal = ref(false);
 const annotationVerse = ref<Verse | null>(null);
 const annotationText = ref("");
-const verseAnnotations = ref<Record<string, string>>({});
+const highlightColor = ref("#ffe58f");
+const verseAnnotations = ref<Record<string, { html: string; note: string }>>(
+  {}
+);
 
 function openAnnotationModal(verse: Verse) {
   annotationVerse.value = verse;
-  annotationText.value = verseAnnotations.value[getVerseKey(verse)] || "";
+  selectedText.value = getSelectedText();
+  const key = getVerseKey(verse);
+  annotationText.value = verseAnnotations.value[key]?.note || "";
+  highlightColor.value = "#ffe58f";
   showAnnotationModal.value = true;
 }
 
 function saveAnnotation() {
-  if (annotationVerse.value) {
-    const key = getVerseKey(annotationVerse.value);
-    verseAnnotations.value[key] = annotationText.value.trim();
+  if (!annotationVerse.value || !selectedText.value) {
+    showAnnotationModal.value = false;
+    return;
   }
+
+  const key = getVerseKey(annotationVerse.value);
+  const originalText = annotationVerse.value.text;
+
+  const escaped = selectedText.value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  const regex = new RegExp(escaped, "i");
+
+  const highlightedHTML = originalText.replace(
+    regex,
+    `<span style="background-color: ${highlightColor.value}">$&</span>`
+  );
+
+  verseAnnotations.value[key] = {
+    html: highlightedHTML,
+    note: annotationText.value.trim(),
+  };
+
   showAnnotationModal.value = false;
 }
 
@@ -368,8 +418,21 @@ function deleteAnnotation() {
   showAnnotationModal.value = false;
 }
 
+function getHighlightStyle(verse: Verse) {
+  const key = getVerseKey(verse);
+  const annotation = verseAnnotations.value[key];
+  return annotation && annotation.color
+    ? { backgroundColor: annotation.color }
+    : {};
+}
+
 function getVerseKey(verse: Verse): string {
   return `${selectedBook.value?.name}-${selectedChapter.value}-${verse.verse}`;
+}
+
+function getVerseHTML(verse: Verse) {
+  const key = getVerseKey(verse);
+  return verseAnnotations.value[key]?.html || verse.text;
 }
 
 function toggleBookmarks() {
@@ -382,15 +445,32 @@ function toggleAnnotations() {
   if (showAnnotations.value) showBookmarks.value = false;
 }
 function goToAnnotation(key: string) {
-  const [bookChapter, verse] = key.split(":");
-  const [bookName, chapter] = bookChapter.split(" ");
+  const parts = key.split("-");
+  if (parts.length !== 3) return;
+
+  const [bookName, chapterStr, verseStr] = parts;
+  const chapter = parseInt(chapterStr);
+  const verseNum = parseInt(verseStr);
+
   const book = books.find((b) => b.name === bookName);
-  if (book) {
-    selectedBook.value = book;
-    selectChapter(parseInt(chapter));
-    highlightedVerse.value = parseInt(verse);
-    showAnnotations.value = false;
-  }
+  if (!book) return;
+
+  selectedBook.value = book;
+  showAnnotations.value = false;
+
+  // Delay setting the chapter to ensure Vue updates the book
+  setTimeout(() => {
+    selectChapter(chapter);
+
+    // Delay highlighting until verses load
+    setTimeout(() => {
+      highlightedVerse.value = verseNum;
+
+      // Scroll to pages section
+      const pages = document.querySelector(".pages-container");
+      pages?.scrollIntoView({ behavior: "smooth", block: "start" });
+    }, 300);
+  }, 100);
 }
 
 interface Verse {
