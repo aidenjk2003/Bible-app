@@ -33,29 +33,28 @@
         <!-- Book list -->
         <div class="sidebar-section" v-if="!showBookmarks && !showAnnotations">
           <h3 class="section-title">Books of the Bible</h3>
-          <div class="search-section">
+          <div class="search-section" style="position: relative">
             <input
               v-model="searchQuery"
               type="text"
               placeholder="Search for a book..."
               class="search-input"
+              @blur="hideSuggestionsWithDelay"
             />
-          </div>
-          <div class="testament-section">
-            <select
-              v-model="selectedBookName"
-              @change="selectBook(selectedBookName)"
-              class="book-select"
+
+            <ul
+              v-if="searchQuery && filteredBooks.length > 0"
+              class="suggestions-dropdown"
             >
-              <option disabled value="">Select a Book</option>
-              <option
+              <li
                 v-for="book in filteredBooks"
                 :key="book.name"
-                :value="book.name"
+                @mousedown.prevent="selectBookFromDropdown(book.name)"
+                class="suggestion-item"
               >
                 {{ book.name }}
-              </option>
-            </select>
+              </li>
+            </ul>
           </div>
         </div>
 
@@ -280,11 +279,11 @@
               <div class="feature-list">
                 <div class="feature">
                   <span class="feature-icon">👆</span>
-                  <span>Click verses to highlight</span>
+                  <span>Highlight verses to highlight</span>
                 </div>
                 <div class="feature">
                   <span class="feature-icon">💾</span>
-                  <span>Double-click to bookmark</span>
+                  <span>Click to bookmark</span>
                 </div>
                 <div class="feature">
                   <span class="feature-icon">📄</span>
@@ -372,9 +371,30 @@ const showAnnotationModal = ref(false);
 const annotationVerse = ref<Verse | null>(null);
 const annotationText = ref("");
 const highlightColor = ref("#ffe58f");
-const verseAnnotations = ref<Record<string, { html: string; note: string }>>(
-  {}
-);
+const verseAnnotations = ref<
+  Record<
+    string,
+    {
+      html?: string; // optional for partial
+      note: string;
+      color: string; // always present
+    }
+  >
+>({});
+
+const showSuggestions = ref(false);
+
+function selectBookFromDropdown(bookName: string) {
+  selectedBookName.value = bookName;
+  selectBook(bookName);
+}
+
+function hideSuggestionsWithDelay() {
+  // Allow time for click to register before hiding
+  setTimeout(() => {
+    showSuggestions.value = false;
+  }, 100);
+}
 
 function openAnnotationModal(verse: Verse) {
   annotationVerse.value = verse;
@@ -386,26 +406,33 @@ function openAnnotationModal(verse: Verse) {
 }
 
 function saveAnnotation() {
-  if (!annotationVerse.value || !selectedText.value) {
-    showAnnotationModal.value = false;
-    return;
-  }
+  if (!annotationVerse.value) return;
 
   const key = getVerseKey(annotationVerse.value);
   const originalText = annotationVerse.value.text;
 
-  const escaped = selectedText.value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-  const regex = new RegExp(escaped, "i");
+  // If the user selected text, insert a span
+  if (selectedText.value) {
+    const escaped = selectedText.value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+    const regex = new RegExp(escaped, "i");
 
-  const highlightedHTML = originalText.replace(
-    regex,
-    `<span style="background-color: ${highlightColor.value}">$&</span>`
-  );
+    const highlightedHTML = originalText.replace(
+      regex,
+      `<span style="background-color: ${highlightColor.value}">$&</span>`
+    );
 
-  verseAnnotations.value[key] = {
-    html: highlightedHTML,
-    note: annotationText.value.trim(),
-  };
+    verseAnnotations.value[key] = {
+      html: highlightedHTML,
+      note: annotationText.value.trim(),
+      color: highlightColor.value,
+    };
+  } else {
+    // fallback: full-verse color only
+    verseAnnotations.value[key] = {
+      note: annotationText.value.trim(),
+      color: highlightColor.value,
+    };
+  }
 
   showAnnotationModal.value = false;
 }
@@ -421,7 +448,7 @@ function deleteAnnotation() {
 function getHighlightStyle(verse: Verse) {
   const key = getVerseKey(verse);
   const annotation = verseAnnotations.value[key];
-  return annotation && annotation.color
+  return annotation && !annotation.html && annotation.color
     ? { backgroundColor: annotation.color }
     : {};
 }
@@ -559,6 +586,7 @@ function selectBook(bookName: string) {
     selectedChapter.value = null;
     verses.value = [];
     highlightedVerse.value = null;
+    searchQuery.value = bookName;
   }
 }
 
@@ -706,6 +734,32 @@ function toggleDarkMode() {
   font-weight: bold;
   color: var(--rich-burgundy);
   margin-bottom: 0.5rem;
+}
+
+.suggestions-dropdown {
+  position: absolute;
+  top: 100%;
+  left: 0;
+  right: 0;
+  background: var(--soft-parchment);
+  border: 1px solid var(--border-color);
+  border-top: none;
+  max-height: 200px;
+  overflow-y: auto;
+  z-index: 100;
+  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+  border-radius: 0 0 10px 10px;
+}
+
+.suggestion-item {
+  padding: 0.75rem 1rem;
+  cursor: pointer;
+  transition: background 0.2s ease;
+}
+
+.suggestion-item:hover {
+  background: var(--primary-gold);
+  color: white;
 }
 
 .annotation-input {
@@ -1168,11 +1222,6 @@ function toggleDarkMode() {
   color: var(--rich-burgundy);
   margin-bottom: 0.25rem;
 }
-.book-select {
-  background-color: #fdf7ed;
-  border: 1px solid #c4b08b;
-  color: #2f1b0c;
-}
 
 .chapter-number {
   font-size: 1.2rem;
@@ -1631,6 +1680,84 @@ function toggleDarkMode() {
   background: var(--primary-gold);
   color: white;
   transform: scale(1.1);
+}
+
+body {
+  font-family: Inter, sans-serif;
+  margin: 0;
+  padding: 0;
+  background: var(--soft-parchment);
+  color: var(--text-dark);
+  font-size: 16px;
+  line-height: 1.6;
+}
+
+.main-layout {
+  display: flex;
+  flex-direction: row;
+  min-height: 100vh;
+}
+
+.book-sidebar {
+  background: var(--sidebar-color);
+  padding: 1.5rem;
+  overflow-y: auto;
+  max-height: 100vh;
+  width: 300px;
+  box-sizing: border-box;
+}
+
+.bible-main {
+  flex: 1;
+  padding: 2rem;
+  overflow-y: auto;
+}
+
+.search-input {
+  width: 100%;
+  max-width: 100%;
+  padding: 1rem;
+  font-size: 1.1rem;
+  border: 2px solid var(--primary-gold);
+  border-radius: 12px;
+  background: var(--soft-parchment);
+  color: var(--text-dark);
+  font-weight: 500;
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.05);
+  transition: all 0.2s ease;
+  margin-bottom: 1rem;
+}
+
+.search-input:focus {
+  outline: none;
+  border-color: var(--rich-burgundy);
+  box-shadow: 0 0 8px rgba(212, 175, 55, 0.4);
+}
+
+button,
+.book-button,
+.chapter-button {
+  padding: 0.75rem 1.25rem;
+  font-size: 1rem;
+  min-height: 44px;
+  border-radius: 8px;
+}
+
+@media (max-width: 768px) {
+  .main-layout {
+    flex-direction: column;
+  }
+
+  .book-sidebar {
+    width: 100%;
+    padding: 1rem;
+    max-height: none;
+  }
+
+  .bible-main {
+    width: 100%;
+    padding: 1rem;
+  }
 }
 
 /* Print Styles */
