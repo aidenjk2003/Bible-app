@@ -42,19 +42,22 @@
               @blur="hideSuggestionsWithDelay"
             />
 
-            <ul
-              v-if="searchQuery && filteredBooks.length > 0"
-              class="suggestions-dropdown"
-            >
-              <li
-                v-for="book in filteredBooks"
-                :key="book.name"
-                @mousedown.prevent="selectBookFromDropdown(book.name)"
-                class="suggestion-item"
+            <div class="testament-section">
+              <select
+                v-model="selectedBookName"
+                @change="selectBook(selectedBookName)"
+                class="book-select"
               >
-                {{ book.name }}
-              </li>
-            </ul>
+                <option disabled value="">Select a Book</option>
+                <option
+                  v-for="book in filteredBooks"
+                  :key="book.name"
+                  :value="book.name"
+                >
+                  {{ book.name }}
+                </option>
+              </select>
+            </div>
           </div>
         </div>
 
