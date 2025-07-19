@@ -33,31 +33,45 @@
         <!-- Book list -->
         <div class="sidebar-section" v-if="!showBookmarks && !showAnnotations">
           <h3 class="section-title">Books of the Bible</h3>
-          <div class="search-section" style="position: relative">
+
+          <div class="testament-section">
+            <select
+              v-model="selectedBookName"
+              @change="selectBook(selectedBookName)"
+              class="book-select"
+            >
+              <option disabled value="">Select a Book</option>
+              <option
+                v-for="book in filteredBooks"
+                :key="book.name"
+                :value="book.name"
+              >
+                {{ book.name }}
+              </option>
+            </select>
+          </div>
+          <div class="search-bar-wrapper" ref="bookSearchRef">
             <input
               v-model="searchQuery"
               type="text"
-              placeholder="Search for a book..."
-              class="search-input"
-              @blur="hideSuggestionsWithDelay"
+              class="search-input-enhanced"
+              placeholder="🔍 Search for a book..."
+              @focus="showSuggestions = true"
             />
 
-            <div class="testament-section">
-              <select
-                v-model="selectedBookName"
-                @change="selectBook(selectedBookName)"
-                class="book-select"
+            <ul
+              v-if="showSuggestions && searchQuery && filteredBooks.length > 0"
+              class="suggestions-dropdown-enhanced"
+            >
+              <li
+                v-for="book in filteredBooks"
+                :key="book.name"
+                @mousedown.prevent="selectBookFromDropdown(book.name)"
+                class="suggestion-item-enhanced"
               >
-                <option disabled value="">Select a Book</option>
-                <option
-                  v-for="book in filteredBooks"
-                  :key="book.name"
-                  :value="book.name"
-                >
-                  {{ book.name }}
-                </option>
-              </select>
-            </div>
+                {{ book.name }}
+              </li>
+            </ul>
           </div>
         </div>
 
@@ -349,9 +363,28 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, watch } from "vue";
+import { ref, computed, watch, onMounted, onBeforeUnmount } from "vue";
 import kjv from "./data/KJV.json";
 import logo from "./data/church.png";
+
+const searchSectionRef = ref<HTMLElement | null>(null);
+
+function handleClickOutside(event: MouseEvent) {
+  if (
+    searchSectionRef.value &&
+    !searchSectionRef.value.contains(event.target as Node)
+  ) {
+    showSuggestions.value = false;
+  }
+}
+
+onMounted(() => {
+  document.addEventListener("click", handleClickOutside);
+});
+
+onBeforeUnmount(() => {
+  document.removeEventListener("click", handleClickOutside);
+});
 
 const searchQuery = ref("");
 const selectedBookName = ref("");
@@ -366,6 +399,20 @@ const selectedText = ref("");
 function getSelectedText() {
   const selection = window.getSelection();
   return selection?.toString().trim() || "";
+}
+
+function handleTextSelect(verse: Verse) {
+  const selected = getSelectedText();
+
+  // Only open modal if a non-empty text selection was made
+  if (selected && selected.length > 1) {
+    annotationVerse.value = verse;
+    selectedText.value = selected;
+    const key = getVerseKey(verse);
+    annotationText.value = verseAnnotations.value[key]?.note || "";
+    highlightColor.value = "#ffe58f";
+    showAnnotationModal.value = true;
+  }
 }
 
 const showAnnotations = ref(false);
@@ -390,13 +437,9 @@ const showSuggestions = ref(false);
 function selectBookFromDropdown(bookName: string) {
   selectedBookName.value = bookName;
   selectBook(bookName);
-}
-
-function hideSuggestionsWithDelay() {
-  // Allow time for click to register before hiding
-  setTimeout(() => {
-    showSuggestions.value = false;
-  }, 100);
+  // Clear search after selection
+  searchQuery.value = "";
+  showSuggestions.value = false;
 }
 
 function openAnnotationModal(verse: Verse) {
@@ -580,6 +623,10 @@ function goToHomepage() {
   selectedChapter.value = null;
   verses.value = [];
   highlightedVerse.value = null;
+  searchQuery.value = "";
+  selectedBookName.value = "";
+  showSuggestions.value = false;
+  window.scrollTo({ top: 0, behavior: "smooth" });
 }
 
 function selectBook(bookName: string) {
@@ -1639,6 +1686,77 @@ function toggleDarkMode() {
 ::selection {
   background: rgba(212, 175, 55, 0.3);
   color: var(--rich-burgundy);
+}
+
+.search-bar-wrapper {
+  position: relative;
+  margin-bottom: 1.5rem;
+}
+
+.search-input-enhanced {
+  width: 100%;
+  padding: 1.2rem 1.5rem 1.2rem 3rem;
+  font-size: 1.1rem;
+  border: 2px solid var(--border-color);
+  border-radius: 16px;
+  background: linear-gradient(135deg, var(--soft-parchment) 0%, #fefbf5 100%);
+  color: var(--text-dark);
+  font-family: "Crimson Text", serif;
+  font-weight: 500;
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08),
+    inset 0 1px 3px rgba(255, 255, 255, 0.6);
+  position: relative;
+}
+
+.search-input-enhanced::before {
+  content: "🔍";
+  position: absolute;
+  left: 1rem;
+  top: 50%;
+  transform: translateY(-50%);
+  font-size: 1.2rem;
+  color: var(--primary-gold);
+  pointer-events: none;
+  z-index: 2;
+}
+
+.search-input-enhanced:focus {
+  outline: none;
+  border-color: var(--rich-burgundy);
+  background: #fffdf4;
+  box-shadow: 0 0 10px rgba(212, 175, 55, 0.3);
+}
+
+.suggestions-dropdown-enhanced {
+  position: absolute;
+  top: 100%;
+  left: 0;
+  right: 0;
+  margin-top: 0.25rem;
+  background: var(--soft-parchment);
+  border: 2px solid var(--primary-gold);
+  border-top: none;
+  border-radius: 0 0 12px 12px;
+  max-height: 220px;
+  overflow-y: auto;
+  z-index: 100;
+  box-shadow: 0 6px 16px rgba(0, 0, 0, 0.1);
+}
+
+.suggestion-item-enhanced {
+  padding: 0.9rem 1.25rem;
+  cursor: pointer;
+  transition: background 0.25s ease, transform 0.25s ease;
+  font-size: 1.05rem;
+  font-weight: 500;
+  color: var(--rich-burgundy);
+}
+
+.suggestion-item-enhanced:hover {
+  background: var(--primary-gold);
+  color: white;
+  transform: translateX(4px);
 }
 
 /* Focus Styles for Accessibility */
