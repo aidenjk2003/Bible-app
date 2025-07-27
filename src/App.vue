@@ -423,19 +423,7 @@ function getSelectedText() {
   return selection?.toString().trim() || "";
 }
 
-function handleTextSelect(verse: Verse) {
-  const selected = getSelectedText();
 
-  // Only open modal if a non-empty text selection was made
-  if (selected && selected.length > 1) {
-    annotationVerse.value = verse;
-    selectedText.value = selected;
-    const key = getVerseKey(verse);
-    annotationText.value = verseAnnotations.value[key]?.note || "";
-    highlightColor.value = "#ffe58f";
-    showAnnotationModal.value = true;
-  }
-}
 
 const showAnnotations = ref(false);
 
