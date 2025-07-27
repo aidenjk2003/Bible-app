@@ -724,7 +724,7 @@ function removeBookmark(id: string) {
 }
 
 function goToBookmark(bookmark: Bookmark) {
-  const book = books.find((b) => b.name === bookmark.book);
+  const book = books.value.find((b) => b.name === bookmark.book);
   if (book) {
     selectedBook.value = book;
     selectChapter(bookmark.chapter);
