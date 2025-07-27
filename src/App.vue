@@ -201,7 +201,15 @@
                         @click="openAnnotationModal(verse)"
                         @dblclick="addBookmark(verse)"
                       >
-                        <span class="verse-number">{{ verse.verse }}</span>
+                        <span
+                          class="verse-number"
+                          :class="{ bookmarked: isBookmarked(verse) }"
+                          @click.stop="toggleBookmark(verse)"
+                          title="Click verse to bookmark"
+                        >
+                          {{ verse.verse }}
+                        </span>
+
                         <span
                           class="verse-text"
                           v-html="getVerseHTML(verse)"
@@ -235,7 +243,15 @@
                         @click="openAnnotationModal(verse)"
                         @dblclick="addBookmark(verse)"
                       >
-                        <span class="verse-number">{{ verse.verse }}</span>
+                        <span
+                          class="verse-number"
+                          :class="{ bookmarked: isBookmarked(verse) }"
+                          @click.stop="toggleBookmark(verse)"
+                          title="Click to bookmark"
+                        >
+                          {{ verse.verse }}
+                        </span>
+
                         <span
                           class="verse-text"
                           v-html="getVerseHTML(verse)"
@@ -296,15 +312,15 @@
               <div class="feature-list">
                 <div class="feature">
                   <span class="feature-icon">👆</span>
-                  <span>Highlight verses to highlight</span>
+                  <span>Highlight Verses to Highlight</span>
                 </div>
                 <div class="feature">
                   <span class="feature-icon">💾</span>
-                  <span>Click to bookmark</span>
+                  <span>Click Verse Numbers to Bookmark</span>
                 </div>
                 <div class="feature">
                   <span class="feature-icon">📄</span>
-                  <span>Navigate with page turning</span>
+                  <span>Navigate with Page Turning</span>
                 </div>
               </div>
             </div>
@@ -378,6 +394,12 @@ function handleClickOutside(event: MouseEvent) {
   }
 }
 
+function isBookmarked(verse: Verse): boolean {
+  if (!selectedBook.value || !selectedChapter.value) return false;
+  const id = `${selectedBook.value.name}-${selectedChapter.value}-${verse.verse}`;
+  return bookmarks.value.some((b) => b.id === id);
+}
+
 onMounted(() => {
   document.addEventListener("click", handleClickOutside);
 });
@@ -390,10 +412,10 @@ const searchQuery = ref("");
 const selectedBookName = ref("");
 
 const filteredBooks = computed(() => {
-  const q = searchQuery.value.toLowerCase();
-  return books.filter((b) => b.name.toLowerCase().includes(q));
+  const q = searchQuery.value.toLowerCase().trim();
+  if (!q) return books.value; // return all if query is empty
+  return books.value.filter((b) => b.name.toLowerCase().startsWith(q));
 });
-
 const selectedText = ref("");
 
 function getSelectedText() {
@@ -525,7 +547,7 @@ function goToAnnotation(key: string) {
   const chapter = parseInt(chapterStr);
   const verseNum = parseInt(verseStr);
 
-  const book = books.find((b) => b.name === bookName);
+  const book = books.value.find((b) => b.name === bookName);
   if (!book) return;
 
   selectedBook.value = book;
@@ -575,7 +597,7 @@ interface Bookmark {
 }
 
 const bibleData = kjv as BibleData;
-const books = bibleData.books;
+const books = ref(bibleData.books);
 
 // State
 const selectedBook = ref<Book | null>(null);
@@ -630,7 +652,7 @@ function goToHomepage() {
 }
 
 function selectBook(bookName: string) {
-  const found = books.find((b) => b.name === bookName);
+  const found = books.value.find((b) => b.name === bookName);
   if (found) {
     selectedBook.value = found;
     selectedChapter.value = null;
@@ -668,6 +690,28 @@ function previousChapter() {
 function nextChapter() {
   if (canGoNext.value && selectedChapter.value) {
     selectChapter(selectedChapter.value + 1);
+  }
+}
+
+function toggleBookmark(verse: Verse) {
+  if (!selectedBook.value || !selectedChapter.value) return;
+
+  const id = `${selectedBook.value.name}-${selectedChapter.value}-${verse.verse}`;
+  const index = bookmarks.value.findIndex((b) => b.id === id);
+
+  if (index !== -1) {
+    // Already bookmarked → remove it
+    bookmarks.value.splice(index, 1);
+  } else {
+    // Not bookmarked → add it
+    const bookmark: Bookmark = {
+      id,
+      book: selectedBook.value.name,
+      chapter: selectedChapter.value,
+      verse: verse.verse,
+      text: verse.text.substring(0, 50) + "...",
+    };
+    bookmarks.value.push(bookmark);
   }
 }
 
@@ -1089,6 +1133,20 @@ function toggleDarkMode() {
   color: #2f1b0c;
 }
 
+.book-select {
+  width: 100%;
+  min-width: 200px; /* Adjust as needed */
+  max-width: 100%;
+  padding: 0.5rem 1rem;
+  font-size: 1rem;
+  border: 2px solid var(--primary-gold);
+  border-radius: 10px;
+  background: var(--soft-parchment);
+  color: var(--text-dark);
+  font-family: inherit;
+  transition: all 0.3s ease;
+}
+
 .dark-mode .book-sidebar {
   background: var(--soft-parchment);
   border-color: rgba(212, 175, 55, 0.3);
@@ -1410,6 +1468,12 @@ function toggleDarkMode() {
   margin-right: 0.75rem;
   min-width: 2rem;
   text-align: center;
+}
+
+.verse-number.bookmarked {
+  background: var(--primary-gold);
+  color: white;
+  transform: scale(1.1);
 }
 
 .verse-text {
