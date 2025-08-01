@@ -22,12 +22,21 @@
           <button @click="toggleDarkMode" class="control-btn theme-toggle">
             <span class="icon">{{ isDarkMode ? "☀️" : "🌙" }}</span>
           </button>
+          <button v-if="user" @click="logout" class="control-btn logout-btn">
+            <span class="icon">🚪</span>
+          </button>
         </div>
       </div>
     </header>
-
+    <div v-if="!user" class="login-container">
+      <h2>Login to access your Bible</h2>
+      <input v-model="email" placeholder="Email" />
+      <input v-model="password" type="password" placeholder="Password" />
+      <button @click="signIn">Login</button>
+      <button @click="signUp">Register</button>
+    </div>
     <!-- Main Bible Interface -->
-    <main class="bible-main">
+    <main v-else class="bible-main">
       <!-- Book Selection Sidebar -->
       <aside class="book-sidebar">
         <!-- Book list -->
@@ -383,6 +392,45 @@ import { ref, computed, watch, onMounted, onBeforeUnmount } from "vue";
 import kjv from "./data/KJV.json";
 import logo from "./data/church.png";
 
+import { auth } from "../firebase";
+import {
+  signInWithEmailAndPassword,
+  createUserWithEmailAndPassword,
+  onAuthStateChanged,
+  signOut,
+  type User,
+} from "firebase/auth";
+
+const email = ref("");
+const password = ref("");
+const user = ref<User | null>(null);
+
+function signIn() {
+  signInWithEmailAndPassword(auth, email.value, password.value)
+    .then((result) => {
+      user.value = result.user;
+    })
+    .catch((err) => alert(err.message));
+}
+
+function signUp() {
+  createUserWithEmailAndPassword(auth, email.value, password.value)
+    .then((result) => {
+      user.value = result.user;
+    })
+    .catch((err) => alert(err.message));
+}
+
+function logout() {
+  signOut(auth);
+  user.value = null;
+}
+
+onMounted(() => {
+  onAuthStateChanged(auth, (u) => {
+    user.value = u;
+  });
+});
 const searchSectionRef = ref<HTMLElement | null>(null);
 
 function handleClickOutside(event: MouseEvent) {
@@ -422,8 +470,6 @@ function getSelectedText() {
   const selection = window.getSelection();
   return selection?.toString().trim() || "";
 }
-
-
 
 const showAnnotations = ref(false);
 
